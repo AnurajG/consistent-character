@@ -1,0 +1,46 @@
+name: consistent_character
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - cudatoolkit=11.8
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pip
+  - pip:
+    # Core requirements
+    - torch
+    - torchvision
+    - torchaudio
+    - torchsde
+    - einops
+    - transformers>=4.25.1
+    - safetensors>=0.3.0
+    - aiohttp
+    - accelerate
+    - pyyaml
+    - Pillow
+    - scipy
+    - tqdm
+    - psutil
+    - kornia>=0.7.1
+    - websocket-client==1.6.3
+    - diffusers>=0.25.0
+    - albumentations==1.4.3
+    - requests
+    - opencv-python-headless>=4.0.1.24
+    - numpy
+    
+    # Optional dependencies for extended functionality
+    - cmake
+    - imageio
+    - joblib
+    - matplotlib
+    - scikit-learn
+    - numba
+    - pandas
+    - onnx
