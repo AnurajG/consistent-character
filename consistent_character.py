@@ -8,7 +8,7 @@ import random
 import time
 import shutil
 from PIL import Image, ExifTags
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 import subprocess
 import sys
 
@@ -20,6 +20,7 @@ POSE_PATH = f"{INPUT_DIR}/poses"
 MAX_HEADSHOTS = 14
 MAX_POSES = 30
 WORKFLOW_JSON = "workflow_api.json"
+BASE_URL = "https://weights.replicate.delivery/default/comfy-ui"
 
 class ConsistentCharacter:
     def __init__(self, comfyui_address: str = "127.0.0.1:8188"):
@@ -330,6 +331,55 @@ class ConsistentCharacter:
         print(f"\nGeneration complete! {len(output_images)} images created.")
         return output_images
 
+def download_weights(weights_to_download: Optional[List[str]] = None):
+    """Download model weights specified in weights.json
+    
+    Args:
+        weights_to_download: Optional list of specific weight names to download.
+                            If None, downloads a default set of necessary weights.
+    """
+    try:
+        # Import the weight manifest and downloader
+        try:
+            from weights_manifest import WeightsManifest
+            from weights_downloader import WeightsDownloader
+            weights_downloader = WeightsDownloader()
+        except ImportError:
+            print("Could not import weights_manifest or weights_downloader modules.")
+            print("Ensure weights_manifest.py and weights_downloader.py are in the current directory.")
+            return False
+            
+        if not os.path.exists("weights.json"):
+            print("weights.json not found in the current directory.")
+            return False
+            
+        # Default essential weights if none specified
+        if weights_to_download is None:
+            weights_to_download = [
+                # Core SDXL models
+                "sd_xl_base_1.0.safetensors",
+                "sd_xl_refiner_1.0.safetensors",
+                # ControlNet models needed for poses
+                "control_v11p_sd15_openpose.pth",
+                "control_v11p_sd15_openpose_fp16.safetensors",
+                "OpenPoseXL2.safetensors",
+                # Removing backgrounds
+                "RMBG-1.4/model.pth"
+            ]
+            
+        print(f"Downloading {len(weights_to_download)} model weights...")
+        for weight in weights_to_download:
+            try:
+                weights_downloader.download_weights(weight)
+            except Exception as e:
+                print(f"Error downloading weight {weight}: {str(e)}")
+                
+        print("Weight downloading complete")
+        return True
+    except Exception as e:
+        print(f"Error in download_weights: {str(e)}")
+        return False
+
 def download_pose_images():
     """Download pose images from the repository"""
     print("Downloading pose images...")
@@ -353,14 +403,16 @@ def download_pose_images():
         # Remove downloaded archive
         os.remove("pose_images.tar")
         print("Pose images downloaded successfully")
+        return True
     except Exception as e:
         print(f"Error downloading pose images: {str(e)}")
         print("Please download pose images manually and place them in the 'inputs/poses' directory")
+        return False
 
 def main():
     """Main function for command line interface"""
     parser = argparse.ArgumentParser(description="Generate consistent character images in different poses")
-    parser.add_argument("image", help="Path to the subject image")
+    parser.add_argument("image", nargs="?", help="Path to the subject image")
     parser.add_argument("--prompt", default="A portrait photo of a person", help="Positive prompt describing the character")
     parser.add_argument("--negative-prompt", default="", help="Negative prompt for things to avoid")
     parser.add_argument("--pose-type", choices=["Headshot poses", "Half-body poses", "Both headshots and half-body poses"], 
@@ -371,12 +423,38 @@ def main():
     parser.add_argument("--seed", type=int, help="Random seed for generation")
     parser.add_argument("--comfyui-address", default="127.0.0.1:8188", help="ComfyUI server address")
     parser.add_argument("--download-poses", action="store_true", help="Download pose images")
+    parser.add_argument("--download-weights", action="store_true", help="Download necessary model weights")
+    parser.add_argument("--download-specific-weights", nargs="+", help="Download specific model weights")
+    parser.add_argument("--setup", action="store_true", help="Setup mode: download all necessary resources")
     
     args = parser.parse_args()
+    
+    # Setup mode: download all necessary resources
+    if args.setup:
+        print("Setting up Consistent Character generator...")
+        download_pose_images()
+        download_weights()
+        print("Setup complete!")
+        return
+        
+    # Download weights if requested
+    if args.download_weights:
+        download_weights()
+        
+    # Download specific weights if requested
+    if args.download_specific_weights:
+        download_weights(args.download_specific_weights)
     
     # Download pose images if requested
     if args.download_poses:
         download_pose_images()
+    
+    # If no image provided and in download-only mode, exit
+    if args.image is None:
+        if args.download_weights or args.download_poses or args.download_specific_weights:
+            return
+        else:
+            parser.error("the following arguments are required: image")
     
     # Check if workflow JSON exists
     if not os.path.exists(WORKFLOW_JSON):
